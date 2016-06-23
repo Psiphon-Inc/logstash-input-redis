@@ -39,6 +39,11 @@ module LogStash module Inputs class Redis < LogStash::Inputs::Threadable
   # Initial connection timeout in seconds.
   config :timeout, :validate => :number, :default => 5
 
+  # Number of log events to process before reconnecting to redis, 0 is never
+  config :reconnect_after, :validate => :number, :default => 0
+  @@events_processed = 0
+  @@sigwinch_id = nil
+
   # Password to authenticate with. There is no authentication by default.
   config :password, :validate => :password
 
@@ -117,12 +122,14 @@ module LogStash module Inputs class Redis < LogStash::Inputs::Threadable
   end # def register
 
   def run(output_queue)
+    @@sigwinch_id = trap_sigwinch
     @run_method.call(output_queue)
   rescue LogStash::ShutdownSignal
     # ignore and quit
   end # def run
 
   def stop
+    Stud::untrap("WINCH", @@sigwinch_id) unless @@sigwinch_id.nil?
     @stop_method.call
   end
 
@@ -177,6 +184,15 @@ EOF
   def queue_event(msg, output_queue)
     begin
       @codec.decode(msg) do |event|
+        if @reconnect_after > 0
+          @@events_processed += 1
+          if @@events_processed >= @reconnect_after
+            @logger.debug("Event reconnect threshold reached, reconnecting to redis, resetting counter")
+            force_reconnect
+            @@events_processed = 0
+          end
+        end
+
         decorate(event)
         output_queue << event
       end
@@ -186,6 +202,21 @@ EOF
   end
 
   # private
+  def force_reconnect
+    return if @redis.nil? || !@redis.connected?
+
+    @redis.client.disconnect
+    # Reset the redis variable to trigger reconnect
+    @redis = nil
+  end
+
+  def trap_sigwinch
+    Stud::trap("WINCH") do
+      @logger.debug("SIGWINCH caught, forcing reconnect")
+      force_reconnect
+    end
+  end
+
   def list_stop
     return if @redis.nil? || !@redis.connected?
 
