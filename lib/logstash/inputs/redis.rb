@@ -42,6 +42,9 @@ module LogStash module Inputs class Redis < LogStash::Inputs::Threadable
   # Number of log events to process before reconnecting to redis, 0 is never
   config :reconnect_after, :validate => :number, :default => 0
   @@events_processed = 0
+
+  # Allow this instance of the input to force reconnecting to redis on receiving a SIGWINCH
+  config :handle_sigwinch, :validate => :boolean, :default => false
   @@sigwinch_id = nil
 
   # Password to authenticate with. There is no authentication by default.
@@ -122,7 +125,7 @@ module LogStash module Inputs class Redis < LogStash::Inputs::Threadable
   end # def register
 
   def run(output_queue)
-    @@sigwinch_id = trap_sigwinch
+    @@sigwinch_id = trap_sigwinch if @handle_sigwinch
     @run_method.call(output_queue)
   rescue LogStash::ShutdownSignal
     # ignore and quit
