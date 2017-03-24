@@ -2,7 +2,7 @@ Gem::Specification.new do |s|
 
   s.name            = 'logstash-input-redis'
   s.version         = '2.0.7'
-  s.licenses        = ['Apache License (2.0)']
+  s.licenses        = ['Apache-2.0']
   s.summary         = "This input will read events from a Redis instance"
   s.description     = "This gem is a Logstash plugin required to be installed on top of the Logstash core pipeline using $LS_HOME/bin/logstash-plugin install gemname. This gem is not a stand-alone program"
   s.authors         = ["Elastic"]
